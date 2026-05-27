@@ -182,6 +182,25 @@
       opacity: 0.85;
     }
 
+    .show-more-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      color: #2b6cb0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      margin-top: 8px;
+    }
+
+    .show-more-btn:hover {
+      background: #ebf4ff;
+    }
+
     .status-badge {
       font-size: 0.7rem;
       padding: 2px 8px;
@@ -317,6 +336,7 @@
     }
 
     const view = new URLSearchParams(window.location.search).get('view') || 'all';
+    const INITIAL_PAST_COUNT = 3;
 
     async function loadEvents() {
       const loadingEl = document.getElementById('loading');
@@ -349,7 +369,15 @@
           if (view === 'all' && past.length > 0) {
             html += `<div class="past-section"><div class="section-title">Past Events <span class="count">${past.length}</span></div>`;
           }
-          html += past.map(e => renderEvent(e, true)).join('');
+          const showInitial = (view === 'past' || view === 'all') && past.length > INITIAL_PAST_COUNT;
+          past.forEach((e, i) => {
+            const hidden = showInitial && i >= INITIAL_PAST_COUNT ? ' style="display:none" data-past-hidden' : '';
+            html += `<div${hidden}>${renderEvent(e, true)}</div>`;
+          });
+          if (showInitial) {
+            const remaining = past.length - INITIAL_PAST_COUNT;
+            html += `<button class="show-more-btn" onclick="togglePastEvents(this)">Show ${remaining} more past event${remaining > 1 ? 's' : ''}</button>`;
+          }
           if (view === 'all' && past.length > 0) html += `</div>`;
         }
 
@@ -360,6 +388,17 @@
       } catch (err) {
         loadingEl.innerHTML = `<div class="error-msg">Unable to load events. Please try again later.</div>`;
         console.error('Event feed error:', err);
+      }
+    }
+
+    function togglePastEvents(btn) {
+      const hidden = document.querySelectorAll('[data-past-hidden]');
+      const isShowing = hidden[0] && hidden[0].style.display !== 'none';
+      hidden.forEach(el => el.style.display = isShowing ? 'none' : 'block');
+      if (isShowing) {
+        btn.textContent = `Show ${hidden.length} more past event${hidden.length > 1 ? 's' : ''}`;
+      } else {
+        btn.textContent = 'Show fewer';
       }
     }
 
