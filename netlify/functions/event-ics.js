@@ -64,7 +64,11 @@ function buildIcs(ev) {
     ? (addr ? `${venue.name}, ${addr}` : venue.name)
     : (addr || 'Online');
 
-  const description = (summary ? summary + '\n\n' : '') + (url ? 'Register / details: ' + url : '');
+  const optOutUrl = 'https://eventbrite-feed-cscmp.netlify.app/.netlify/functions/calendar-optout';
+  const description =
+    (summary ? summary + '\n\n' : '') +
+    (url ? 'Register / details: ' + url + '\n\n' : '') +
+    'To stop receiving these calendar invites: ' + optOutUrl;
 
   const lines = [
     'BEGIN:VCALENDAR',

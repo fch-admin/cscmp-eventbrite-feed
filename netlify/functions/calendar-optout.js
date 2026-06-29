@@ -20,7 +20,7 @@ exports.handler = async function (event) {
   const email  = ((event.queryStringParameters || {}).email || '').trim().toLowerCase();
 
   if (!apiKey) return page(500, 'Not configured', 'The opt-out service is missing its Brevo key. Please contact us.');
-  if (!email)  return page(400, 'Missing email', 'This link is missing an email address.');
+  if (!email)  return formPage();   // no email in the link → show the email-entry form
 
   try {
     const resp = await fetch(BREVO_CONTACTS + encodeURIComponent(email), {
@@ -41,6 +41,29 @@ exports.handler = async function (event) {
     return page(500, 'Something went wrong', 'Please try again shortly.');
   }
 };
+
+function formPage() {
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stop CSCMP SoFlo calendar invites</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8f9fa;color:#333;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .card{background:#fff;max-width:480px;margin:16px;padding:32px;border-radius:12px;border:1px solid #e2e8f0;text-align:center;line-height:1.6}
+  h1{color:#1a365d;font-size:1.3rem;margin:0 0 12px}
+  p{color:#4a5568;font-size:.95rem;margin:0 0 20px}
+  input{width:100%;box-sizing:border-box;padding:12px;font-size:1rem;border:1px solid #cbd5e0;border-radius:8px;margin-bottom:12px}
+  button{width:100%;padding:12px;font-size:1rem;font-weight:600;color:#fff;background:#2b6cb0;border:0;border-radius:8px;cursor:pointer}
+  button:hover{background:#1a4e8a}
+</style></head><body><div class="card">
+  <h1>Stop calendar invites</h1>
+  <p>Enter your email to stop receiving CSCMP SoFlo event calendar invites. You'll still get our regular emails.</p>
+  <form method="GET" action="/.netlify/functions/calendar-optout">
+    <input type="email" name="email" placeholder="you@example.com" required autofocus>
+    <button type="submit">Stop calendar invites</button>
+  </form>
+</div></body></html>`;
+  return { statusCode: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: html };
+}
 
 function page(status, title, body) {
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
