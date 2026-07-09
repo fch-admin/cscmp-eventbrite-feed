@@ -132,13 +132,18 @@ function buildIcs(ev, attendeeEmail, attendeeName) {
     'URL:'         + esc(url),
     'ORGANIZER;CN=' + esc(SENDER.name) + ':mailto:' + SENDER.email,
     'ATTENDEE;CN=' + esc(attendeeName) + ';ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:' + attendeeEmail,
-    'STATUS:CONFIRMED', 'SEQUENCE:0', 'TRANSP:OPAQUE',
+    'STATUS:CONFIRMED', 'SEQUENCE:' + icsSeq(ev), 'TRANSP:OPAQUE',
     'BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:Reminder', 'END:VALARM',
     'END:VEVENT', 'END:VCALENDAR'
   ];
   return lines.map(fold).join('\r\n');
 }
 
+// SEQUENCE from Eventbrite's last-changed time so edits supersede the old invite.
+function icsSeq(ev) {
+  const t = Date.parse((ev && (ev.changed || ev.created)) || '');
+  return Number.isFinite(t) ? Math.floor(t / 1000) : 0;
+}
 function extractId(url) { const m = String(url).match(/(\d{6,})\D*$/); return m ? m[1] : ''; }
 function toIcsUtc(iso) { return String(iso || '').replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
 function esc(s) {

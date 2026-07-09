@@ -47,6 +47,12 @@ exports.handler = async function (event) {
   }
 };
 
+// SEQUENCE from Eventbrite's last-changed time so edits supersede the old invite.
+function icsSeq(ev) {
+  const t = Date.parse((ev && (ev.changed || ev.created)) || '');
+  return Number.isFinite(t) ? Math.floor(t / 1000) : 0;
+}
+
 // Eventbrite URLs end in "...-tickets-1234567890" — grab the trailing id.
 function extractId(url) {
   const m = String(url).match(/(\d{6,})\D*$/);
@@ -87,7 +93,7 @@ function buildIcs(ev) {
     'URL:'         + esc(url),
     'ORGANIZER;CN=' + esc(ORGANIZER_NAME) + ':mailto:' + ORGANIZER_EMAIL,
     'STATUS:CONFIRMED',
-    'SEQUENCE:0',
+    'SEQUENCE:' + icsSeq(ev),
     'TRANSP:OPAQUE',
     'BEGIN:VALARM',
     'TRIGGER:-PT1H',
