@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSCMP SoFlo — Send Calendar Invites</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f8f9fa; color:#333; margin:0; padding:24px; }
+    .card { background:#fff; max-width:560px; margin:0 auto; padding:28px; border-radius:12px; border:1px solid #e2e8f0; }
+    h1 { color:#1a365d; font-size:1.3rem; margin:0 0 6px; }
+    .sub { color:#718096; font-size:.9rem; margin:0 0 20px; }
+    label { display:block; font-weight:600; font-size:.85rem; margin:14px 0 4px; color:#2d3748; }
+    input { width:100%; padding:11px; font-size:1rem; border:1px solid #cbd5e0; border-radius:8px; }
+    .row { display:flex; gap:10px; }
+    .row > div { flex:1; }
+    button { margin-top:16px; width:100%; padding:12px; font-size:1rem; font-weight:600; border:0; border-radius:8px; cursor:pointer; }
+    .btn-test { background:#edf2f7; color:#2b6cb0; border:1px solid #cbd5e0; }
+    .btn-send { background:#2b6cb0; color:#fff; }
+    .btn-send:hover { background:#1a4e8a; }
+    .btn-test:hover { background:#e2e8f0; }
+    .status { margin-top:18px; padding:14px; border-radius:8px; font-size:.9rem; line-height:1.5; display:none; }
+    .status.show { display:block; }
+    .status.info { background:#ebf8ff; color:#2c5282; }
+    .status.ok { background:#f0fff4; color:#22543d; }
+    .status.err { background:#fff5f5; color:#c53030; }
+    .bar { height:10px; background:#e2e8f0; border-radius:5px; overflow:hidden; margin-top:8px; }
+    .bar > div { height:100%; width:0; background:#2b6cb0; transition:width .3s; }
+    .hint { font-size:.78rem; color:#a0aec0; margin-top:2px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Send calendar invites</h1>
+    <p class="sub">Sends a personalized calendar invite (auto-adds to their calendar) to everyone with <strong>EVENT_PREF = OPTED_IN</strong> in Brevo.</p>
+
+    <label>Eventbrite event link</label>
+    <input id="url" type="url" placeholder="https://www.eventbrite.com/e/...">
+
+    <label>Admin passcode</label>
+    <input id="key" type="password" placeholder="your Netlify ADMIN_SECRET">
+    <div class="hint">Set once in Netlify → Environment variables → ADMIN_SECRET.</div>
+
+    <div class="row">
+      <div>
+        <label>Test to my email first</label>
+        <input id="testEmail" type="email" placeholder="you@email.com">
+      </div>
+    </div>
+    <button class="btn-test" onclick="sendTest()">Send test to my email</button>
+    <button class="btn-send" onclick="sendAll()">Send to ALL opted-in members</button>
+
+    <div id="status" class="status"></div>
+    <div class="bar" id="barWrap" style="display:none"><div id="bar"></div></div>
+  </div>
+
+  <script>
+    const FN = '/.netlify/functions/send-invites';
+    const $ = id => document.getElementById(id);
+    function show(cls, html) { const s = $('status'); s.className = 'status show ' + cls; s.innerHTML = html; }
+
+    function inputs() {
+      return { url: $('url').value.trim(), key: $('key').value.trim() };
+    }
+
+    async function sendTest() {
+      const { url, key } = inputs();
+      const test = $('testEmail').value.trim();
+      if (!url || !key || !test) return show('err', 'Fill in the event link, passcode, and your test email.');
+      show('info', 'Sending a test invite to ' + test + '…');
+      try {
+        const r = await fetch(`${FN}?key=${encodeURIComponent(key)}&url=${encodeURIComponent(url)}&test=${encodeURIComponent(test)}`);
+        const d = await r.json();
+        if (r.ok && d.sent) show('ok', '✅ Test invite sent to <strong>' + test + '</strong>. Check that email / your calendar, then send to all.');
+        else show('err', '❌ ' + (d.error || 'Failed to send test.'));
+      } catch (e) { show('err', '❌ ' + e.message); }
+    }
+
+    async function sendAll() {
+      const { url, key } = inputs();
+      if (!url || !key) return show('err', 'Fill in the event link and passcode.');
+      if (!confirm('Send calendar invites to ALL opted-in members? This cannot be undone.')) return;
+
+      $('barWrap').style.display = 'block';
+      let offset = 0, sent = 0, failed = 0, scanned = 0, total = null;
+      show('info', 'Starting…');
+      try {
+        while (true) {
+          const r = await fetch(`${FN}?key=${encodeURIComponent(key)}&url=${encodeURIComponent(url)}&offset=${offset}&limit=50`);
+          const d = await r.json();
+          if (!r.ok) { show('err', '❌ ' + (d.error || 'Error')); return; }
+          sent += d.sent; failed += d.failed; scanned += d.scanned;
+          if (d.total) total = d.total;
+          if (total) $('bar').style.width = Math.min(100, Math.round(scanned / total * 100)) + '%';
+          show('info', `Sending… <strong>${sent}</strong> invites sent${failed ? ', ' + failed + ' failed' : ''} (scanned ${scanned}${total ? ' of ' + total : ''} contacts)`);
+          if (d.done) break;
+          offset = d.nextOffset;
+        }
+        $('bar').style.width = '100%';
+        show('ok', `✅ Done. <strong>${sent}</strong> invites sent${failed ? ', <strong>' + failed + '</strong> failed' : ''}.`);
+      } catch (e) { show('err', '❌ ' + e.message); }
+    }
+  </script>
+</body>
+</html>
