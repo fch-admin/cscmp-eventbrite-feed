@@ -30,12 +30,55 @@
     .bar { height:10px; background:#e2e8f0; border-radius:5px; overflow:hidden; margin-top:8px; }
     .bar > div { height:100%; width:0; background:#2b6cb0; transition:width .3s; }
     .hint { font-size:.78rem; color:#a0aec0; margin-top:2px; }
+    details.help { background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; margin:0 0 20px; }
+    details.help summary { cursor:pointer; font-weight:600; color:#2b6cb0; font-size:.9rem; }
+    details.help[open] summary { margin-bottom:10px; }
+    details.help h3 { font-size:.85rem; color:#1a365d; margin:14px 0 4px; }
+    details.help h3:first-of-type { margin-top:4px; }
+    details.help p, details.help li { font-size:.85rem; color:#4a5568; line-height:1.55; }
+    details.help ol, details.help ul { margin:4px 0 4px 18px; padding:0; }
+    details.help code { background:#edf2f7; padding:1px 5px; border-radius:4px; font-size:.8rem; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Send calendar invites</h1>
     <p class="sub">Sends a personalized calendar invite (auto-adds to their calendar) to everyone with <strong>EVENT_PREF = OPTED_IN</strong> in Brevo.</p>
+
+    <details class="help">
+      <summary>ℹ️ How this works &amp; what you need — read me</summary>
+
+      <h3>What this page does</h3>
+      <p>It emails a personalized calendar invite to every CSCMP SoFlo member who opted in to calendar invites (Brevo attribute <code>EVENT_PREF = OPTED_IN</code>). Each person gets their own invite, so the event <strong>lands on their calendar automatically</strong> with Accept / Tentative / Decline — they don't have to import anything.</p>
+
+      <h3>What you need before using it</h3>
+      <ul>
+        <li><strong>Admin passcode</strong> — the value set in Netlify → Site configuration → Environment variables → <code>ADMIN_SECRET</code>.</li>
+        <li><strong>An Eventbrite event</strong> — the invite details (title, date, venue) are pulled live from its Eventbrite page.</li>
+        <li><strong>Members opted in</strong> — people who checked the calendar-invite box on the sign-up form (synced to Brevo as <code>EVENT_PREF = OPTED_IN</code>).</li>
+        <li><em>(Behind the scenes)</em> the sender <code>cscmp@sofloroundtable.org</code> must be an authenticated sender in Brevo.</li>
+      </ul>
+
+      <h3>To send an invite</h3>
+      <ol>
+        <li>Paste the <strong>Eventbrite event link</strong> and your <strong>passcode</strong>.</li>
+        <li>Enter your own email and click <strong>Send test invite to my email</strong> — confirm it lands on your calendar.</li>
+        <li>Click <strong>Send invites to ALL opted-in members</strong>. A progress bar shows how many were sent.</li>
+      </ol>
+
+      <h3>To change an event</h3>
+      <p>Edit the event in Eventbrite, then come back and <strong>Send invites to ALL</strong> again. Because it's the same event, calendars <strong>update in place</strong> (no duplicate). Note: a change only reaches calendars when you re-send here — editing Eventbrite alone does nothing.</p>
+
+      <h3>To cancel an event</h3>
+      <p>Cancel it in Eventbrite first, then use <strong>Send CANCELLATION to ALL</strong> — it removes the event from everyone's calendars. (Test to yourself first with the cancellation test button.)</p>
+
+      <h3>Good to know</h3>
+      <ul>
+        <li>Only opted-in, still-subscribed members receive it. People who unsubscribed in Brevo or clicked "stop calendar invites" are skipped automatically.</li>
+        <li>Each send uses your Brevo <strong>transactional</strong> email quota (about one send per opted-in member per event).</li>
+        <li>Always run the <strong>test to yourself</strong> before a full send.</li>
+      </ul>
+    </details>
 
     <label>Eventbrite event link</label>
     <input id="url" type="url" placeholder="https://www.eventbrite.com/e/...">
