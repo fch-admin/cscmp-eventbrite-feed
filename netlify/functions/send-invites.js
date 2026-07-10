@@ -38,7 +38,7 @@ exports.handler = async function (event) {
 
     // TEST MODE: send one invite to the given address and stop.
     if (q.test) {
-      const ok = await sendInvite(brevoKey, ev, { email: q.test.trim().toLowerCase(), attributes: {} });
+      const ok = await sendInvite(brevoKey, ev, { email: q.test.trim().toLowerCase(), attributes: {} }, { cancel: !!q.cancel });
       return json(200, { test: true, sent: ok ? 1 : 0, failed: ok ? 0 : 1 });
     }
 
@@ -58,7 +58,7 @@ exports.handler = async function (event) {
       const attrs = c.attributes || {};
       const optedIn = String(attrs.EVENT_PREF || '').toUpperCase() === 'OPTED_IN';
       if (!optedIn || c.emailBlacklisted) continue;
-      const ok = await sendInvite(brevoKey, ev, c);
+      const ok = await sendInvite(brevoKey, ev, c, { cancel: !!q.cancel });
       ok ? sent++ : failed++;
     }
 
@@ -74,17 +74,22 @@ exports.handler = async function (event) {
   }
 };
 
-async function sendInvite(brevoKey, ev, contact) {
-  const email = contact.email;
-  const attrs = contact.attributes || {};
-  const name  = [attrs.FIRSTNAME, attrs.LASTNAME].filter(Boolean).join(' ') || email;
-  const title = (ev.name && ev.name.text) || 'CSCMP SoFlo Event';
+async function sendInvite(brevoKey, ev, contact, opts) {
+  const cancel = !!(opts && opts.cancel);
+  const email  = contact.email;
+  const attrs  = contact.attributes || {};
+  const name   = [attrs.FIRSTNAME, attrs.LASTNAME].filter(Boolean).join(' ') || email;
+  const title  = (ev.name && ev.name.text) || 'CSCMP SoFlo Event';
 
-  const ics = buildIcs(ev, email, name);
+  const ics = buildIcs(ev, email, name, { cancel });
   const b64 = Buffer.from(ics, 'utf-8').toString('base64');
   const optOutUrl = OPTOUT_BASE + '?email=' + encodeURIComponent(email);
 
-  const html = `<p>Hi ${escapeHtml(attrs.FIRSTNAME || 'there')},</p>
+  const subject = cancel ? ('Cancelled: ' + title) : title;
+  const html = cancel
+    ? `<p>Hi ${escapeHtml(attrs.FIRSTNAME || 'there')},</p>
+<p><strong>${escapeHtml(title)}</strong> has been <strong>cancelled</strong>. This update should remove it from your calendar automatically. We're sorry for any inconvenience.</p>`
+    : `<p>Hi ${escapeHtml(attrs.FIRSTNAME || 'there')},</p>
 <p>You're invited to <strong>${escapeHtml(title)}</strong>. This invitation should appear on your calendar automatically — just tap <strong>Accept</strong>, <strong>Tentative</strong>, or <strong>Decline</strong>.</p>
 <p><a href="${escapeHtml(ev.url || '#')}">Event details &amp; registration</a></p>
 <hr>
@@ -93,9 +98,9 @@ async function sendInvite(brevoKey, ev, contact) {
   const body = {
     sender: SENDER,
     to: [{ email, name }],
-    subject: title,
+    subject,
     htmlContent: html,
-    attachment: [{ content: b64, name: 'invite.ics' }]
+    attachment: [{ content: b64, name: cancel ? 'cancel.ics' : 'invite.ics' }]
   };
 
   const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -106,7 +111,8 @@ async function sendInvite(brevoKey, ev, contact) {
   return resp.ok;
 }
 
-function buildIcs(ev, attendeeEmail, attendeeName) {
+function buildIcs(ev, attendeeEmail, attendeeName, opts) {
+  const cancel = !!(opts && opts.cancel);
   const name = (ev.name && ev.name.text) || 'Event';
   const url  = ev.url || '';
   const summary = (ev.summary || (ev.description && ev.description.text) || '').trim();
@@ -114,26 +120,32 @@ function buildIcs(ev, attendeeEmail, attendeeName) {
   const addr  = venue.address && venue.address.localized_address_display;
   const location = venue.name ? (addr ? venue.name + ', ' + addr : venue.name) : (addr || 'Online');
 
-  const description =
-    (summary ? summary + '\n\n' : '') +
-    (url ? 'Register / details: ' + url + '\n\n' : '') +
-    'To stop these calendar invites: ' + OPTOUT_BASE;
+  const description = cancel
+    ? 'This event has been cancelled.'
+    : (summary ? summary + '\n\n' : '') +
+      (url ? 'Register / details: ' + url + '\n\n' : '') +
+      'To stop these calendar invites: ' + OPTOUT_BASE;
+
+  // Cancellations use METHOD:CANCEL + STATUS:CANCELLED and a SEQUENCE guaranteed
+  // higher than any prior invite (now-time) so clients pull the event off calendars.
+  const method = cancel ? 'CANCEL' : 'REQUEST';
+  const status = cancel ? 'CANCELLED' : 'CONFIRMED';
+  const seq    = cancel ? Math.floor(Date.now() / 1000) : icsSeq(ev);
 
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//CSCMP SoFlo//Invite//EN', 'CALSCALE:GREGORIAN', 'METHOD:REQUEST',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//CSCMP SoFlo//Invite//EN', 'CALSCALE:GREGORIAN', 'METHOD:' + method,
     'BEGIN:VEVENT',
     'UID:eventbrite-' + (ev.id || 'x') + '@cscmpsoflo',
     'DTSTAMP:' + toIcsUtc(new Date().toISOString()),
     'DTSTART:' + toIcsUtc(ev.start && ev.start.utc),
     'DTEND:'   + toIcsUtc(ev.end && ev.end.utc),
-    'SUMMARY:'     + esc(name),
+    'SUMMARY:'     + esc((cancel ? 'CANCELLED: ' : '') + name),
     'DESCRIPTION:' + esc(description),
     'LOCATION:'    + esc(location),
     'URL:'         + esc(url),
     'ORGANIZER;CN=' + esc(SENDER.name) + ':mailto:' + SENDER.email,
     'ATTENDEE;CN=' + esc(attendeeName) + ';ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:' + attendeeEmail,
-    'STATUS:CONFIRMED', 'SEQUENCE:' + icsSeq(ev), 'TRANSP:OPAQUE',
-    'BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:Reminder', 'END:VALARM',
+    'STATUS:' + status, 'SEQUENCE:' + seq, 'TRANSP:OPAQUE',
     'END:VEVENT', 'END:VCALENDAR'
   ];
   return lines.map(fold).join('\r\n');
